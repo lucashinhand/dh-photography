@@ -1,0 +1,17 @@
+node_modules/
+dist/
+.astro/
+.cache/
+playwright-report/
+test-results/
+.env
+.env.*
+!.env.example
+.DS_Store
+migration/source/Squarespace-Wordpress-Export-*.xml
+migration/downloads/
+migration/private/
+# Locally installed agent integrations are not website source.
+.agents/
+.claude/
+skills-lock.json
