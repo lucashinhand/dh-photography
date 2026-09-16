@@ -1,0 +1,82 @@
+{
+  "generatedAt": "2026-09-16T08:25:15.417Z",
+  "baseUrl": "https://recorder-nonagon-24ym.squarespace.com",
+  "sourceXml": "migration/source/Squarespace-Wordpress-Export-09-16-2026.xml",
+  "xmlSha256": "ab98a9a7b31c6cdb8060c6bd65f4ec039f62aff98ae316abc0226184059f4f95",
+  "crawl": {
+    "status": "complete",
+    "routes": 18,
+    "pages": 18,
+    "sitemapPages": 18,
+    "sitemapImageEntries": 1115,
+    "sitemapUniqueAssets": 1100,
+    "errors": [],
+    "warnings": [],
+    "orderPolicy": "live"
+  },
+  "inventory": {
+    "xmlItems": 1094,
+    "xmlPages": 18,
+    "xmlAttachments": 1076,
+    "xmlPlacements": 1089,
+    "uniqueAssets": 1100,
+    "outputPages": 18,
+    "outputPlacements": 1089,
+    "liveOnlyPlacements": 0,
+    "xmlOnlyPlacements": 0
+  },
+  "metadata": {
+    "conflicts": 0,
+    "missingAltText": 0,
+    "pagesWithoutLiveData": []
+  },
+  "screenshots": [
+    {
+      "layout": "gallery",
+      "viewport": "desktop",
+      "slug": "portfolio",
+      "path": "/portfolio",
+      "file": "migration/references/screenshots/gallery-desktop-portfolio.jpg"
+    },
+    {
+      "layout": "gallery",
+      "viewport": "mobile",
+      "slug": "portfolio",
+      "path": "/portfolio",
+      "file": "migration/references/screenshots/gallery-mobile-portfolio.jpg"
+    },
+    {
+      "layout": "text",
+      "viewport": "desktop",
+      "slug": "contact",
+      "path": "/contact",
+      "file": "migration/references/screenshots/text-desktop-contact.jpg"
+    },
+    {
+      "layout": "text",
+      "viewport": "mobile",
+      "slug": "contact",
+      "path": "/contact",
+      "file": "migration/references/screenshots/text-mobile-contact.jpg"
+    },
+    {
+      "layout": "mixed",
+      "viewport": "desktop",
+      "slug": "about",
+      "path": "/about",
+      "file": "migration/references/screenshots/mixed-desktop-about.jpg"
+    },
+    {
+      "layout": "mixed",
+      "viewport": "mobile",
+      "slug": "about",
+      "path": "/about",
+      "file": "migration/references/screenshots/mixed-mobile-about.jpg"
+    }
+  ],
+  "warnings": [
+    "13 XML placement assets have no attachment record.",
+    "16 pages have live/XML image-order differences; Live display order is used; XML order is retained for comparison."
+  ],
+  "orderPolicy": "live"
+}

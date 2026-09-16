@@ -1,0 +1,17 @@
+node_modules
+dist
+.astro
+.cache
+.agents
+.claude
+skills-lock.json
+package-lock.json
+migration/source
+migration/downloads
+migration/private
+migration/screenshots
+migration/manifests
+src/content/site.json
+public/images
+playwright-report
+test-results

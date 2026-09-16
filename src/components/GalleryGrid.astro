@@ -1,0 +1,135 @@
+---
+import type { PortfolioPage } from '../content/types';
+import { assetUrl, photoFor } from '../lib/site';
+import GalleryLightbox, { type LightboxItem } from './GalleryLightbox';
+
+interface Props {
+  page: PortfolioPage;
+  eagerCount?: number;
+}
+
+const { page, eagerCount = 2 } = Astro.props;
+const base = import.meta.env.BASE_URL;
+
+const items = page.placements.flatMap((placement, index) => {
+  const photo = photoFor(placement);
+  if (!photo) return [];
+  const thumbnail = assetUrl(photo.thumbnail, base);
+  const large = assetUrl(photo.large, base);
+  if (!thumbnail || !large) return [];
+  const alt =
+    placement.alt || placement.title || `${page.title} photograph ${index + 1}`;
+  const ratio =
+    photo.width > 0 && photo.height > 0 ? photo.width / photo.height : 1.25;
+  return [{ placement, photo, thumbnail, large, alt, ratio, index }];
+});
+
+// Group adjacent photographs into justified rows. A wide image gets its own
+// row, while the remaining rows naturally settle at two to four photographs.
+type GalleryItem = (typeof items)[number];
+const rows: GalleryItem[][] = [];
+const targetRowRatio = 3.25;
+const wideImageRatio = 2.25;
+let row: GalleryItem[] = [];
+let rowRatio = 0;
+
+for (const item of items) {
+  if (
+    row.length > 0 &&
+    (item.ratio >= wideImageRatio || rowRatio >= targetRowRatio)
+  ) {
+    rows.push(row);
+    row = [];
+    rowRatio = 0;
+  }
+  row.push(item);
+  rowRatio += item.ratio;
+  if (item.ratio >= wideImageRatio || rowRatio >= targetRowRatio) {
+    rows.push(row);
+    row = [];
+    rowRatio = 0;
+  }
+}
+if (row.length > 0) rows.push(row);
+
+// Match the justified row's flex share and the gallery's CSS margins/gaps.
+// Lazy images can use their actual layout width via native sizes="auto".
+function imageSizes(item: GalleryItem, galleryRow: GalleryItem[]) {
+  const share =
+    item.ratio / galleryRow.reduce((sum, entry) => sum + entry.ratio, 0);
+  const gaps = `clamp(0.6rem, 1.05vw, 1.1rem) * ${(galleryRow.length - 1) * share}`;
+  return `(max-width: 620px) calc(100vw - 1.5rem), (max-width: 960px) calc((100vw - 2.25rem) * ${share} - ${gaps}), calc(min(100vw - 3rem, 1440px) * ${share} - ${gaps})`;
+}
+
+const lightboxItems: LightboxItem[] = items.map(
+  ({ placement, large, alt }) => ({
+    large,
+    alt,
+    title: placement.title,
+    caption: placement.caption,
+    tags: placement.tags,
+  }),
+);
+---
+
+{items.length > 0 ? (
+  <>
+    <div
+      class={`gallery-grid gallery-grid--${page.slug}`}
+      role="list"
+      aria-label={`${page.title} photographs`}
+    >
+      {rows.map((galleryRow) => (
+        <div class="gallery-row" role="presentation">
+          {galleryRow.map((item) => {
+            const { placement, photo, thumbnail, large, alt, ratio, index } =
+              item;
+            const sizes = imageSizes(item, galleryRow);
+            return (
+              <div
+                class="gallery-grid__item"
+                role="listitem"
+                style={`--gallery-ratio: ${ratio}`}
+              >
+                <a
+                  class="gallery-grid__link gallery-card"
+                  href={large}
+                  data-lightbox-index={index}
+                  data-photo-id={placement.imageId}
+                  aria-label={placement.title || alt}
+                >
+                  <figure>
+                    <img
+                      src={thumbnail}
+                      srcset={
+                        photo.width > photo.thumbnailWidth
+                          ? `${thumbnail} ${photo.thumbnailWidth}w, ${large} ${photo.width}w`
+                          : `${large} ${photo.width}w`
+                      }
+                      sizes={index < eagerCount ? sizes : `auto, ${sizes}`}
+                      alt={alt}
+                      width={photo.width}
+                      height={photo.height}
+                      loading={index < eagerCount ? 'eager' : 'lazy'}
+                      fetchpriority={index < eagerCount ? 'high' : 'auto'}
+                      decoding="async"
+                    />
+                    {(placement.title || placement.caption) && (
+                      <figcaption class="sr-only">
+                        {placement.title}
+                        {placement.caption && ` — ${placement.caption}`}
+                      </figcaption>
+                    )}
+                  </figure>
+                </a>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </div>
+    <GalleryLightbox client:load items={lightboxItems} />
+  </>
+) : (
+  <p class="empty-state">The portfolio is being prepared.</p>
+)}
