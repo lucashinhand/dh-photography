@@ -3,7 +3,7 @@ name: Validate and deploy portfolio
 on:
   pull_request:
   push:
-    branches: [main, codex/photography-portfolio]
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -24,7 +24,7 @@ jobs:
         include:
           - mode: project
             base: /dh-photography/
-            origin: https://lucashinhand.github.io
+            origin: https://lucashahn.dev
           - mode: domain
             base: /
             origin: https://davidhahnphotography.com.au

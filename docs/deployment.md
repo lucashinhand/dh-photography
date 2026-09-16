@@ -2,13 +2,15 @@
 
 The first review checkpoint is the complete, tested PR. The live Pages checkpoint follows Lucas’s explicit merge approval. Never merge, attach a production domain, change DNS or cancel Squarespace automatically.
 
+The temporary project address inherits the existing account-level `lucashahn.dev` Pages domain. No custom domain is attached to this repository. Actions-based Pages and the main-only environment policy were verified during implementation.
+
 ## Enable and deploy GitHub Pages
 
 1. In repository **Settings → Pages → Build and deployment**, select **GitHub Actions**. The repository is public.
 2. Confirm the `github-pages` environment permits deployments only from `main`.
 3. Review the migration report, screenshots and passing checks on the implementation PR.
 4. After Lucas approves, merge the PR. The workflow validates project and domain-root builds, uploads the official Pages artifact, and deploys only the main branch.
-5. Check the deployment environment URL and open `https://lucashinhand.github.io/dh-photography/`.
+5. Check the deployment environment URL and open `https://lucashahn.dev/dh-photography/`.
 6. Directly visit `/dh-photography/celebrity/`, `/dh-photography/about/` and `/dh-photography/contact/`; test mobile navigation, gallery images, lightbox and a missing URL. Confirm HTTPS and no Squarespace asset requests.
 
 Manual **Actions → Validate and deploy portfolio → Run workflow** is supported. Selecting a non-main branch validates/builds but cannot deploy. PR workflows have no Pages write or OIDC permission. Encoding the photo library is not part of deployment.
