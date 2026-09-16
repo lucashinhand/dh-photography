@@ -1,0 +1,111 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import GalleryGrid from '../components/GalleryGrid.astro';
+import { assetUrl, pageForSlug, safeBodyHtml, site } from '../lib/site';
+import type { PortfolioPage } from '../content/types';
+
+export function getStaticPaths() {
+  return site.pages
+    .filter((page) => page.slug !== 'home' && page.slug !== 'portfolio')
+    .map((page) => ({ params: { slug: page.slug }, props: { page } }));
+}
+
+interface Props {
+  page: PortfolioPage;
+}
+
+const { page: propPage } = Astro.props as Props;
+const page = propPage || pageForSlug(Astro.params.slug || '');
+if (!page)
+  throw new Error(`No page found for ${Astro.params.slug || 'unknown route'}`);
+
+const bodyHtml = safeBodyHtml(page.bodyHtml);
+const firstPhoto = page.placements[0]
+  ? site.photos[page.placements[0].imageId]
+  : undefined;
+const firstImage = firstPhoto
+  ? assetUrl(firstPhoto.large, import.meta.env.BASE_URL)
+  : undefined;
+const phoneHref = site.phone ? `tel:${site.phone.replace(/[^+\d]/g, '')}` : '';
+const emailHref = site.email ? `mailto:${site.email}` : '';
+const instagramHref = site.instagram
+  ? /^https?:\/\//i.test(site.instagram)
+    ? site.instagram
+    : `https://www.instagram.com/${site.instagram.replace(/^@/, '')}`
+  : '';
+const instagramLabel = site.instagram
+  ? site.instagram
+      .replace(/^https?:\/\/(?:www\.)?instagram\.com\//i, '@')
+      .replace(/\/$/, '')
+  : '';
+---
+
+<BaseLayout
+  title={page.title}
+  description={
+    page.description || site.description || `${page.title} — ${site.name}`
+  }
+  canonicalPath={`/${page.slug}/`}
+  image={firstImage}
+  pageKind={page.kind}
+>
+  {page.kind === 'gallery' ? (
+    <section class="portfolio-page">
+      <header class="page-intro">
+        <p class="eyebrow">Portfolio</p>
+        <h1>{page.title}</h1>
+      </header>
+      <GalleryGrid page={page} />
+    </section>
+  ) : page.kind === 'about' ? (
+    <section class="content-page content-page--about">
+      <header class="page-intro">
+        <p class="eyebrow">David Hahn Photography</p>
+        <h1>{page.title}</h1>
+      </header>
+      {bodyHtml && <div class="rich-text" set:html={bodyHtml} />}
+      {page.placements.length > 0 && (
+        <div class="content-page__gallery">
+          <GalleryGrid page={page} />
+        </div>
+      )}
+    </section>
+  ) : (
+    <section class="content-page content-page--contact">
+      <header class="page-intro">
+        <p class="eyebrow">Contact</p>
+        <h1>{page.title}</h1>
+      </header>
+      <div class="contact-layout">
+        {bodyHtml && (
+          <div class="rich-text contact-layout__intro" set:html={bodyHtml} />
+        )}
+        <address class="contact-details">
+          {site.email && (
+            <a class="contact-details__item" href={emailHref}>
+              <span class="contact-details__label">Email</span>
+              <span>{site.email}</span>
+            </a>
+          )}
+          {site.phone && (
+            <a class="contact-details__item" href={phoneHref}>
+              <span class="contact-details__label">Phone</span>
+              <span>{site.phone}</span>
+            </a>
+          )}
+          {site.instagram && (
+            <a
+              class="contact-details__item"
+              href={instagramHref}
+              rel="me noopener"
+              target="_blank"
+            >
+              <span class="contact-details__label">Instagram</span>
+              <span>{instagramLabel}</span>
+            </a>
+          )}
+        </address>
+      </div>
+    </section>
+  )}
+</BaseLayout>

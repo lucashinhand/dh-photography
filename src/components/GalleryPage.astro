@@ -1,0 +1,26 @@
+---
+import type { PortfolioPage } from '../content/types';
+import GalleryGrid from './GalleryGrid.astro';
+import { site } from '../lib/site';
+
+interface Props {
+  page: PortfolioPage;
+  home?: boolean;
+}
+
+const { page, home = false } = Astro.props;
+---
+
+<section class:list={['portfolio-page', { 'portfolio-page--home': home }]}>
+  {home ? (
+    <header class="sr-only">
+      <h1>{site.name}</h1>
+    </header>
+  ) : (
+    <header class="page-intro">
+      <p class="eyebrow">Portfolio</p>
+      <h1>{page.title}</h1>
+    </header>
+  )}
+  <GalleryGrid page={page} />
+</section>

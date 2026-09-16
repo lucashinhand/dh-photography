@@ -1,0 +1,23 @@
+---
+import BaseLayout from '../layouts/BaseLayout.astro';
+import GalleryPage from '../components/GalleryPage.astro';
+import { homePage, site } from '../lib/site';
+
+const page = homePage();
+---
+
+<BaseLayout
+  title={site.name}
+  description={site.description || site.name}
+  canonicalPath="/"
+  pageKind="gallery"
+>
+  {page ? (
+    <GalleryPage page={page} home />
+  ) : (
+    <section class="empty-page">
+      <h1>{site.name}</h1>
+      <p>The portfolio is being prepared.</p>
+    </section>
+  )}
+</BaseLayout>
