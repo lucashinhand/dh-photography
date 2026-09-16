@@ -42,6 +42,7 @@ jobs:
       - run: npm run lint
       - run: npm run typecheck
       - run: npm test
+      - run: npm run migration:report
       - run: npm run validate
       - run: npm run build
       - run: npm run validate -- --build
