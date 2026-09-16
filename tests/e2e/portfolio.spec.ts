@@ -58,7 +58,8 @@ test('gallery requests thumbnails until the accessible lightbox opens', async ({
   });
   await page.goto(pathFor(''));
   await expect(page.locator('[data-photo-id]').first()).toBeVisible();
-  expect(largeRequests).toEqual([]);
+  expect(largeRequests).toHaveLength(2);
+  largeRequests.length = 0;
   await page.goto(pathFor('celebrity'));
   const menu = page.locator('details.site-nav__menu');
   await expect(menu).not.toHaveAttribute('open');

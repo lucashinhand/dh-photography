@@ -6,9 +6,10 @@ import GalleryLightbox, { type LightboxItem } from './GalleryLightbox';
 interface Props {
   page: PortfolioPage;
   eagerCount?: number;
+  home?: boolean;
 }
 
-const { page, eagerCount = 2 } = Astro.props;
+const { page, eagerCount = 2, home = false } = Astro.props;
 const base = import.meta.env.BASE_URL;
 
 const items = page.placements.flatMap((placement, index) => {
@@ -88,10 +89,18 @@ const lightboxItems: LightboxItem[] = items.map(
                 >
                   <figure>
                     <img
-                      src={thumbnail}
+                      src={home && index < 2 ? large : thumbnail}
                       alt={alt}
-                      width={photo.thumbnailWidth || undefined}
-                      height={photo.thumbnailHeight || undefined}
+                      width={
+                        home && index < 2
+                          ? photo.width
+                          : photo.thumbnailWidth || undefined
+                      }
+                      height={
+                        home && index < 2
+                          ? photo.height
+                          : photo.thumbnailHeight || undefined
+                      }
                       loading={index < eagerCount ? 'eager' : 'lazy'}
                       fetchpriority={index < eagerCount ? 'high' : 'auto'}
                       decoding="async"
