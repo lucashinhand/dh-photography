@@ -6,10 +6,9 @@ import GalleryLightbox, { type LightboxItem } from './GalleryLightbox';
 interface Props {
   page: PortfolioPage;
   eagerCount?: number;
-  home?: boolean;
 }
 
-const { page, eagerCount = 2, home = false } = Astro.props;
+const { page, eagerCount = 2 } = Astro.props;
 const base = import.meta.env.BASE_URL;
 
 const items = page.placements.flatMap((placement, index) => {
@@ -53,6 +52,15 @@ for (const item of items) {
 }
 if (row.length > 0) rows.push(row);
 
+// Match the justified row's flex share and the gallery's CSS margins/gaps.
+// Lazy images can use their actual layout width via native sizes="auto".
+function imageSizes(item: GalleryItem, galleryRow: GalleryItem[]) {
+  const share =
+    item.ratio / galleryRow.reduce((sum, entry) => sum + entry.ratio, 0);
+  const gaps = `clamp(0.6rem, 1.05vw, 1.1rem) * ${(galleryRow.length - 1) * share}`;
+  return `(max-width: 620px) calc(100vw - 1.5rem), (max-width: 960px) calc((100vw - 2.25rem) * ${share} - ${gaps}), calc(min(100vw - 3rem, 1440px) * ${share} - ${gaps})`;
+}
+
 const lightboxItems: LightboxItem[] = items.map(
   ({ placement, large, alt }) => ({
     large,
@@ -73,8 +81,11 @@ const lightboxItems: LightboxItem[] = items.map(
     >
       {rows.map((galleryRow) => (
         <div class="gallery-row" role="presentation">
-          {galleryRow.map(
-            ({ placement, photo, thumbnail, large, alt, ratio, index }) => (
+          {galleryRow.map((item) => {
+            const { placement, photo, thumbnail, large, alt, ratio, index } =
+              item;
+            const sizes = imageSizes(item, galleryRow);
+            return (
               <div
                 class="gallery-grid__item"
                 role="listitem"
@@ -89,18 +100,16 @@ const lightboxItems: LightboxItem[] = items.map(
                 >
                   <figure>
                     <img
-                      src={home && index < 2 ? large : thumbnail}
+                      src={thumbnail}
+                      srcset={
+                        photo.width > photo.thumbnailWidth
+                          ? `${thumbnail} ${photo.thumbnailWidth}w, ${large} ${photo.width}w`
+                          : `${large} ${photo.width}w`
+                      }
+                      sizes={index < eagerCount ? sizes : `auto, ${sizes}`}
                       alt={alt}
-                      width={
-                        home && index < 2
-                          ? photo.width
-                          : photo.thumbnailWidth || undefined
-                      }
-                      height={
-                        home && index < 2
-                          ? photo.height
-                          : photo.thumbnailHeight || undefined
-                      }
+                      width={photo.width}
+                      height={photo.height}
                       loading={index < eagerCount ? 'eager' : 'lazy'}
                       fetchpriority={index < eagerCount ? 'high' : 'auto'}
                       decoding="async"
@@ -114,8 +123,8 @@ const lightboxItems: LightboxItem[] = items.map(
                   </figure>
                 </a>
               </div>
-            ),
-          )}
+            );
+          })}
         </div>
       ))}
     </div>

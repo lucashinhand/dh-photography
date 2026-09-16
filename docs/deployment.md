@@ -1,6 +1,6 @@
 # Deployment and domain cutover
 
-The first review checkpoint is the complete, tested PR. The live Pages checkpoint follows Lucas’s explicit merge approval. Never merge, attach a production domain, change DNS or cancel Squarespace automatically.
+The first review checkpoint is the complete, tested PR. The live Pages checkpoint follows Lucas’s explicit merge approval. Never merge, attach a production domain or change DNS automatically. Lucas has confirmed that Squarespace will be retained in a dormant state; cancellation is not part of this workflow.
 
 The temporary project address inherits the existing account-level `lucashahn.dev` Pages domain. No custom domain is attached to this repository. Actions-based Pages and the main-only environment policy were verified during implementation.
 
@@ -29,9 +29,9 @@ Before touching DNS, record the current zone and confirm who manages it. Preserv
 6. Run the main-branch deployment with `PAGES_MODE=domain`. Verify that canonical URLs, sitemap, navigation and assets use the domain-root configuration.
 7. Wait for GitHub’s DNS check and certificate provisioning, then enable **Enforce HTTPS**. Check both apex and `www`, and verify the intended redirect to apex.
 8. Check direct legacy routes, phone/email links and external links. Confirm email still sends and receives normally.
-9. Record the successful cutover date and deployment SHA in the tracking issue. Only after recovery/report review and successful cutover should Lucas consider cancelling Squarespace renewal. Cancellation is manual.
+9. Record the successful cutover date and deployment SHA in the tracking issue. Retain the dormant Squarespace site.
 
-DNS propagation and certificate issuance may take time; do not cancel the old service while verification is incomplete. Consult the live official instructions immediately before cutover:
+DNS propagation and certificate issuance may take time. Consult the live official instructions immediately before cutover:
 
 - [Configure a custom domain](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/managing-a-custom-domain-for-your-github-pages-site)
 - [Verify a custom domain](https://docs.github.com/en/pages/configuring-a-custom-domain-for-your-github-pages-site/verifying-your-custom-domain-for-github-pages)
@@ -41,4 +41,4 @@ DNS propagation and certificate issuance may take time; do not cancel the old se
 
 For a site regression, revert the offending commit through a reviewed PR, merge only with approval, and let the main workflow redeploy. Record the last known-good SHA before cutover. A manual workflow on an older branch does not bypass the main-only deployment rule.
 
-For domain trouble, retain the recorded original DNS values and keep Squarespace active until stable. Lucas can restore website routing records if required. Removing the GitHub custom domain and restoring `PAGES_MODE=project` requires a coordinated redeployment to restore the temporary project URL; preserve mail records throughout.
+For domain trouble, retain the recorded original DNS values. Squarespace remains dormant; restoring it as a serving site would be a separate manual decision. Removing the GitHub custom domain and restoring `PAGES_MODE=project` requires a coordinated redeployment to restore the temporary project URL; preserve mail records throughout.

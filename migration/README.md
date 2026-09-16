@@ -39,4 +39,4 @@ Targets are below 750,000,000 bytes for both recovery and published output, with
 
 Run `npm run validate -- --build` after building to audit local assets, metadata, copyright, tracked-file privacy patterns, total sizes and generated links. Automated audits complement human review; inspect all newly committed recovery inputs for public suitability. Source references are under `references/`; rebuilt comparison screenshots are under `screenshots/`.
 
-Human approval of the recovery and an approved PR merge are separate from domain/DNS changes or Squarespace cancellation. Follow the deployment runbook; do not cancel the old site merely because an import completed.
+Human approval of the recovery and an approved PR merge are separate from domain/DNS changes. Follow the deployment runbook. Lucas has confirmed that the Squarespace site will be retained in a dormant state; cancellation is not a launch step.

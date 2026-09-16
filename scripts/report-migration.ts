@@ -123,8 +123,8 @@ lines.push(
   '- The Squarespace form is replaced by public email, telephone and Instagram links.',
   '- The homepage remains available at both / and /portfolio/, with / as the canonical route.',
   '- Raw downloads and unsanitised XML remain local and ignored. Committed WebP files contain no EXIF/IPTC/XMP metadata.',
-  '- Human review of this report and the recovered galleries is pending. Do not treat this report as approval to cancel Squarespace.',
-  '- Production-domain attachment, DNS changes, live Pages verification after merge and cancellation remain separate launch checkpoints.',
+  '- Human review of this report and the recovered galleries is pending. Squarespace will be retained in a dormant state, as confirmed by Lucas.',
+  '- Production-domain attachment, DNS changes and live Pages verification after merge remain separate launch checkpoints.',
   '',
 );
 for (const warning of extraction.warnings ?? []) lines.push(`- ${warning}`);

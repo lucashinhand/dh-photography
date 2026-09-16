@@ -4,7 +4,7 @@
 
 ## Confirmed implementation decisions
 
-On 16 September 2026, Lucas confirmed that final galleries must follow the live website’s displayed order when it differs from XML. XML ordering remains in the reconciliation record. Gallery grids use thumbnails until a lightbox opens.
+On 16 September 2026, Lucas confirmed that final galleries must follow the live website’s displayed order when it differs from XML. XML ordering remains in the reconciliation record. The latest image-loading decision uses native responsive images to choose between the existing thumbnail and large copy as display size or pixel density requires. This supersedes the thumbnail-only policy and the temporary two-lead-image exception. Squarespace will be retained in a dormant state; cancellation is outside the plan.
 
 ## 1. Review resolution and image policy
 
@@ -52,7 +52,7 @@ The site is currently public, so no reactivation is required. If access disappea
 - Deduplicate image files while preserving every gallery placement and its associated metadata.
 - Recalculate the projection after discovery, before bulk downloading. Track actual totals during import; stop before committing if projected repository or site size exceeds 750 MB. Reject individual files above 50 MB; do not introduce Git LFS or silently reduce quality.
 
-Push a dedicated extraction checkpoint commit containing optimised assets, public content and the migration report. Request your report review before recommending Squarespace cancellation.
+Push a dedicated extraction checkpoint commit containing optimised assets, public content and the migration report. Request your report review.
 
 ## 3. Build the portfolio
 
@@ -62,7 +62,7 @@ Use **Astro static generation, TypeScript, React for interactive components, Sha
 - Preserve `/`, `/portfolio`, gallery paths, About and Contact; document intentional replacements.
 - Preserve recovered copy, tags, captions, gallery grouping and order. Keep authored accessibility descriptions distinguishable from original content.
 - Use restrained typography, neutral colours, generous spacing and uncropped mixed-aspect-ratio galleries.
-- Display thumbnails in gallery grids; load large images when opening the lightbox. Avoid eagerly loading full galleries of large files.
+- Use native `srcset`/`sizes` to select the appropriate existing image copy for each displayed size and screen density. Keep below-fold images lazy and use the large copy in the lightbox. No new image package or client-side resize observer is needed.
 - Provide visible focus, keyboard navigation, labelled lightbox controls, focus containment/restoration, Escape dismissal, touch usability and reduced-motion support.
 - Retain public email, phone and Instagram links; replace the Squarespace contact form with those direct links.
 - Generate page titles, descriptions, canonical/social metadata, sitemap, robots and a custom 404 page.
@@ -76,7 +76,7 @@ Structured content separates pages, unique images and ordered gallery placements
 - Add reproducible dependency installation, formatting, linting, type checking, parser/reconciliation tests and production builds.
 - Test every direct route, links, images, keyboard/lightbox behaviour, mobile/desktop layouts and both base-path configurations.
 - Compare rendered galleries with screenshots and manifests; investigate unexplained image or placement differences.
-- Verify that gallery loading uses thumbnails and that production network requests do not depend on Squarespace.
+- Verify responsive source selection on resize and high-density screens, and that production network requests do not depend on Squarespace.
 - Audit copyright, private account data, secrets, embedded metadata and actual repository/build sizes.
 - Require a clean-checkout CI build without cached image derivatives. CI validates committed images and copies them into the site.
 - Use Luna Max agents for bounded implementation, visual QA and independent final review, avoiding overlapping edits.
@@ -86,4 +86,4 @@ Structured content separates pages, unique images and ordered gallery placements
 - Push the completed branch and open a reviewable PR with screenshots, recovery evidence and known limitations. Do not merge it.
 - After approved merge, verify the temporary Pages URL. Follow the separate `davidhahnphotography.com.au` runbook for domain verification, apex/`www`, HTTPS and preservation of MX/email records.
 
-DNS changes, domain attachment and Squarespace cancellation remain under your control.
+DNS changes and domain attachment remain under your control. Squarespace remains dormant and will be retained.

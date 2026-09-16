@@ -43,23 +43,9 @@ test('every recovered route renders all ordered image placements', async ({
   expect(forbidden).toEqual([]);
 });
 
-test('gallery requests thumbnails until the accessible lightbox opens', async ({
+test('gallery navigation and the accessible lightbox remain usable', async ({
   page,
 }) => {
-  const largeRequests: string[] = [];
-  const largePaths = new Set(
-    Object.values(site.photos).map(
-      (photo) => `${base}${photo.large.replace(/^\//, '')}`,
-    ),
-  );
-  page.on('request', (request) => {
-    if (largePaths.has(new URL(request.url()).pathname))
-      largeRequests.push(request.url());
-  });
-  await page.goto(pathFor(''));
-  await expect(page.locator('[data-photo-id]').first()).toBeVisible();
-  expect(largeRequests).toHaveLength(2);
-  largeRequests.length = 0;
   await page.goto(pathFor('celebrity'));
   const menu = page.locator('details.site-nav__menu');
   await expect(menu).not.toHaveAttribute('open');
@@ -79,7 +65,6 @@ test('gallery requests thumbnails until the accessible lightbox opens', async ({
         ),
     )
     .toBe(true);
-  expect(largeRequests).toEqual([]);
   // Wait for the React island to hydrate before activating the progressive link.
   await expect(page.locator('astro-island[ssr]')).toHaveCount(0);
   await first.focus();
@@ -113,7 +98,67 @@ test('gallery requests thumbnails until the accessible lightbox opens', async ({
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(first).toBeFocused();
-  expect(largeRequests.length).toBeGreaterThan(0);
+  expect(original).toBe(await first.getAttribute('href'));
+});
+
+test('native image sources upgrade on resize and high-density screens without JavaScript', async ({
+  browser,
+}) => {
+  const home = site.pages.find((page) => page.slug === 'portfolio')!;
+  const lead = site.photos[home.placements[0].imageId];
+  const lazy = site.photos[home.placements[2].imageId];
+  const assetPath = (value: string) => `${base}${value.replace(/^\//, '')}`;
+  const context = await browser.newContext({
+    viewport: { width: 400, height: 844 },
+    deviceScaleFactor: 1,
+    javaScriptEnabled: false,
+  });
+  try {
+    const page = await context.newPage();
+    await page.goto(`http://127.0.0.1:4321${pathFor('')}`);
+    const image = page.locator('[data-photo-id] img').first();
+    await expect
+      .poll(() =>
+        image.evaluate(
+          (img: HTMLImageElement) => new URL(img.currentSrc).pathname,
+        ),
+      )
+      .toBe(assetPath(lead.thumbnail));
+    await page.setViewportSize({ width: 1600, height: 1000 });
+    await expect
+      .poll(() =>
+        image.evaluate(
+          (img: HTMLImageElement) =>
+            img.complete && new URL(img.currentSrc).pathname,
+        ),
+      )
+      .toBe(assetPath(lead.large));
+  } finally {
+    await context.close();
+  }
+
+  const retina = await browser.newContext({
+    viewport: { width: 400, height: 844 },
+    deviceScaleFactor: 3,
+    javaScriptEnabled: false,
+  });
+  try {
+    const page = await retina.newPage();
+    await page.goto(`http://127.0.0.1:4321${pathFor('')}`);
+    const image = page.locator('[data-photo-id] img').nth(2);
+    await expect(image).toHaveAttribute('loading', 'lazy');
+    await image.scrollIntoViewIfNeeded();
+    await expect
+      .poll(() =>
+        image.evaluate(
+          (img: HTMLImageElement) =>
+            img.complete && new URL(img.currentSrc).pathname,
+        ),
+      )
+      .toBe(assetPath(lazy.large));
+  } finally {
+    await retina.close();
+  }
 });
 
 test('public contact links and reduced motion remain usable', async ({

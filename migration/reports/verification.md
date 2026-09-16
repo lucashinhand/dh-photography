@@ -6,9 +6,9 @@ Verified locally on 16 September 2026 with Node 24, CLI Chromium/Playwright, Ast
 
 - Formatting, ESLint, Astro diagnostics and TypeScript pass (one non-blocking unused-parameter hint in crawler code).
 - 27 unit tests pass: XML parsing/sanitisation/reconciliation, public metadata allowlisting, incomplete-crawl reporting, HTTPS redirects, image orientation/metadata, raw and encoded deduplication, verified resumption, failed-import reports, import interruption/retry recovery, encoded file-size limits, safe URL schemes and content loading.
-- Project build (`/dh-photography/`, `https://lucashahn.dev`): 20 generated HTML routes, 336,530,758 bytes including all serving assets; asset, provenance and built-link audit passes.
-- Domain-root build (`/`, `https://davidhahnphotography.com.au`): 20 generated HTML routes, 336,471,538 bytes; same audit passes. This was a local test, not domain attachment or deployment.
-- Eight Playwright tests pass for each configuration, split across desktop and mobile. They check all 18 recovered routes and exact ordered placements, absence of Squarespace requests, thumbnail-first loading, native menu toggling, keyboard lightbox controls and focus restoration, contact links, reduced motion, 404 and JavaScript-disabled gallery access.
+- Project build (`/dh-photography/`, `https://lucashahn.dev`): 20 generated HTML routes, 337,099,832 bytes including all serving assets; asset, provenance and built-link audit passes.
+- Domain-root build (`/`, `https://davidhahnphotography.com.au`): 20 generated HTML routes, 337,006,022 bytes; same audit passes. This was a local test, not domain attachment or deployment.
+- Ten Playwright tests pass for each configuration, split across desktop and mobile. They check all 18 recovered routes and exact ordered placements, absence of Squarespace requests, native responsive image upgrades on resize and high-density screens with JavaScript disabled, native menu toggling, keyboard lightbox controls and focus restoration, contact links, reduced motion, 404 and JavaScript-disabled gallery access.
 - The final recovery contains 1,100 source IDs, 1,049 unique serving photographs, 2,098 WebP files and 1,089 placements. Checksums, dimensions, aliases and live ordering match the committed manifests. Zero missing images or unexplained placement differences.
 - Images contain no EXIF/IPTC/XMP metadata. Raw downloads and the account-bearing export remain ignored. All tracked and non-ignored publishable files, including root files, are included in the size/privacy audit. Synthetic oversized-root-file and local-path probes were correctly rejected. Recovery screenshot paths are repository-relative. Text is audited for common secret patterns and private recovery paths; sanitised XML author fields are checked. Copyright notices are present and there is no licence file.
 - Repository payload is approximately 363 MB including references/screenshots; serving assets are 335,068,550 bytes. Every committed file is below 50 MB; both payloads are below the 750 MB target.
@@ -23,4 +23,4 @@ Run `node --import tsx scripts/capture-screenshots.ts` against a running project
 
 ## Remaining human and launch checkpoints
 
-Lucas has been asked to review the recovery report. That approval remains pending. The PR must remain unmerged until approved; live Pages verification follows that merge. Domain attachment, DNS updates and Squarespace cancellation are separate manual decisions documented in the deployment runbook.
+The PR must remain unmerged until approved; live Pages verification follows that merge. Domain attachment and DNS updates require separate approval. Squarespace will remain dormant, as confirmed by Lucas; cancellation is not part of this launch.
