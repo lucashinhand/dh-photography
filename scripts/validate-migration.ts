@@ -163,6 +163,47 @@ for (const photo of Object.values(site.photos)) {
     }
   }
 }
+const imageManifest = JSON.parse(
+  await readFile('migration/manifests/images.json', 'utf8'),
+) as {
+  status: string;
+  sourceCount: number;
+  images: Array<{
+    photoIds: string[];
+    large: { path: string; sha256: string };
+    thumbnail: { path: string; sha256: string };
+  }>;
+};
+check(
+  imageManifest.status === 'complete',
+  'Image import manifest is incomplete.',
+);
+check(
+  imageManifest.sourceCount === Object.keys(site.photos).length,
+  'Image manifest source count differs from site content.',
+);
+const manifestIds = new Set<string>();
+for (const record of imageManifest.images) {
+  for (const variant of [record.large, record.thumbnail]) {
+    const assetPath = resolve('public', variant.path.replace(/^\//, ''));
+    check(
+      hashes.get(variant.sha256) === assetPath,
+      `Serving checksum differs from manifest: ${variant.path}`,
+    );
+  }
+  for (const id of record.photoIds) {
+    manifestIds.add(id);
+    check(
+      site.photos[id]?.large === record.large.path &&
+        site.photos[id]?.thumbnail === record.thumbnail.path,
+      `Photo alias differs from manifest: ${id}`,
+    );
+  }
+}
+check(
+  manifestIds.size === Object.keys(site.photos).length,
+  'Image manifest aliases do not cover all photo IDs.',
+);
 const stored = await files('public/images');
 check(
   stored.length === checked.size,
