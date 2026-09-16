@@ -76,6 +76,7 @@ function skippedCrawl(baseUrl: string, routes: string[]): CrawlResult {
     screenshots: [],
     instagram: '',
     errors: [],
+    warnings: [],
     fetchedAt: new Date().toISOString(),
   };
 }
@@ -88,6 +89,7 @@ function publicLivePages(crawl: CrawlResult, outputRoot: string): unknown {
     status: crawl.status,
     instagram: crawl.instagram,
     errors: crawl.errors,
+    warnings: crawl.warnings,
     sitemap: {
       pageCount: crawl.sitemapPageCount,
       imageEntries: crawl.sitemapImageCount,
@@ -158,7 +160,7 @@ function publicReconciliation(reconciliation: ReconciliationResult): unknown {
   };
 }
 
-function buildReport(
+export function buildReport(
   baseUrl: string,
   xmlPath: string,
   xmlSha: string,
@@ -203,6 +205,7 @@ function buildReport(
   }
   if (crawl.errors.length > 0)
     warnings.push(`Live crawl reported ${crawl.errors.length} error(s).`);
+  warnings.push(...crawl.warnings);
   return {
     generatedAt: new Date().toISOString(),
     baseUrl,
@@ -219,6 +222,7 @@ function buildReport(
         crawl.sitemapImages.map((image) => image.imageId),
       ).size,
       errors: crawl.errors,
+      warnings: crawl.warnings,
     },
     inventory: {
       xmlItems: parsed.stats.itemCount,
@@ -338,6 +342,17 @@ async function main(): Promise<void> {
       2,
     ),
   );
+  const exitCode = extractionExitCode(report.crawl.status, options.noCrawl);
+  if (exitCode !== 0) process.exitCode = exitCode;
+}
+
+export function extractionExitCode(
+  status: ExtractionReport['crawl']['status'],
+  noCrawl: boolean,
+): number {
+  if (status === 'complete') return 0;
+  if (noCrawl && status === 'skipped') return 0;
+  return 1;
 }
 
 const entrypoint = process.argv[1]

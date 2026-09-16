@@ -223,7 +223,7 @@ function formatJsonImages(value: unknown, pageSlug: string): LiveImageRecord[] {
   return images;
 }
 
-async function fetchGalleryJson(
+export async function fetchGalleryJson(
   context: BrowserContext,
   url: string,
   timeoutMs: number,
@@ -232,15 +232,36 @@ async function fetchGalleryJson(
   const jsonUrl = `${url}${url.includes('?') ? '&' : '?'}format=json`;
   try {
     const response = await context.request.get(jsonUrl, { timeout: timeoutMs });
-    if (!response.ok()) return { images: [], instagram: '' };
-    const data = (await response.json()) as PublicGalleryJson;
+    if (!response.ok()) {
+      return {
+        images: [],
+        instagram: '',
+        error: `HTTP ${response.status()}`,
+      };
+    }
+    const data = (await response.json()) as PublicGalleryJson | null;
+    if (!data || typeof data !== 'object') {
+      return {
+        images: [],
+        instagram: '',
+        error: 'invalid JSON payload',
+      };
+    }
     return {
       images: formatJsonImages(data.items, pageSlug),
       instagram: publicInstagramUrl(data.website),
     };
-  } catch {
-    return { images: [], instagram: '' };
+  } catch (error) {
+    return {
+      images: [],
+      instagram: '',
+      error: error instanceof Error ? error.message : String(error),
+    };
   }
+}
+
+export function galleryJsonWarning(path: string, error: string): string {
+  return `${path}: format=json unavailable (${error})`;
 }
 
 function mergeLiveImages(
@@ -697,6 +718,7 @@ export async function crawlPublicSite(
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const fetchedAt = new Date().toISOString();
   const errors: string[] = [];
+  const warnings: string[] = [];
   const screenshots: ScreenshotRecord[] = [];
   const pages: LivePageRecord[] = [];
   const navigationLinks: Array<{ href: string; label: string }> = [];
@@ -754,6 +776,7 @@ export async function crawlPublicSite(
         const slug = normalizeSlug(path);
         const raw = await readPageData(page);
         const json = await fetchGalleryJson(context, url, timeoutMs, slug);
+        if (json.error) warnings.push(galleryJsonWarning(path, json.error));
         if (json.instagram) instagramCandidates.push(json.instagram);
         navigationLinks.push(
           ...raw.navigation,
@@ -838,6 +861,7 @@ export async function crawlPublicSite(
       screenshots,
       instagram,
       errors,
+      warnings,
       fetchedAt,
     };
   } catch (error) {
@@ -857,6 +881,7 @@ export async function crawlPublicSite(
       screenshots,
       instagram: '',
       errors,
+      warnings,
       fetchedAt,
     };
   } finally {

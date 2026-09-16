@@ -7,8 +7,15 @@ import test from 'node:test';
 import {
   parsePublicGalleryItems,
   parseSitemapInventory,
+  fetchGalleryJson,
+  galleryJsonWarning,
 } from '../scripts/lib/live-crawl.js';
 import { buildReconciliation } from '../scripts/lib/reconcile.js';
+import {
+  buildReport,
+  extractionExitCode,
+  parseArgs,
+} from '../scripts/extract-squarespace.js';
 import {
   parseXmlExport,
   sanitizeWordpressXml,
@@ -19,15 +26,13 @@ import {
 } from '../scripts/lib/url-normalization.js';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const sanitisedXmlPath = resolve(
+  repositoryRoot,
+  'migration/recovery/squarespace-export-sanitised.xml',
+);
 
 test('parses the namespaced WordPress export and preserves XML image order', async () => {
-  const xml = await readFile(
-    resolve(
-      repositoryRoot,
-      'migration/source/Squarespace-Wordpress-Export-09-16-2026.xml',
-    ),
-    'utf8',
-  );
+  const xml = await readFile(sanitisedXmlPath, 'utf8');
   const parsed = parseXmlExport(xml);
 
   assert.equal(parsed.stats.itemCount, 1094);
@@ -73,14 +78,13 @@ test('groups repeated placements by stable normalized CDN identity', () => {
 });
 
 test('sanitizes author and creator account metadata while retaining public contact copy', async () => {
-  const xml = await readFile(
-    resolve(
-      repositoryRoot,
-      'migration/source/Squarespace-Wordpress-Export-09-16-2026.xml',
-    ),
-    'utf8',
+  const xml = await readFile(sanitisedXmlPath, 'utf8');
+  const withPrivateMetadata = xml.replace(
+    '<item>',
+    '<item><wp:author><wp:login>private-login</wp:login></wp:author><dc:creator>private-creator</dc:creator>',
   );
-  const sanitized = sanitizeWordpressXml(xml);
+  assert.notEqual(withPrivateMetadata, xml);
+  const sanitized = sanitizeWordpressXml(withPrivateMetadata);
   assert.doesNotMatch(
     sanitized,
     /<wp:author\b|<dc:creator\b|<wp:author_email\b/i,
@@ -248,6 +252,7 @@ test('uses live gallery order while retaining XML-only placements after it', () 
     screenshots: [],
     instagram: '',
     errors: [],
+    warnings: [] as string[],
     fetchedAt: new Date().toISOString(),
   };
   const result = buildReconciliation(parsed, crawl);
@@ -258,4 +263,51 @@ test('uses live gallery order while retaining XML-only placements after it', () 
   );
   assert.equal(result.pages[0]?.placements[0]?.title, 'Two');
   assert.equal(result.orderDifferences.length, 1);
+
+  const jsonWarning = galleryJsonWarning('/gallery', 'HTTP 503');
+  crawl.warnings = [jsonWarning];
+  const report = buildReport(
+    crawl.baseUrl,
+    'migration/export.xml',
+    'test-sha',
+    parsed,
+    crawl,
+    result,
+    repositoryRoot,
+  );
+  assert.deepEqual(report.crawl.warnings, [jsonWarning]);
+  assert.ok(report.warnings.includes(jsonWarning));
+});
+
+test('propagates a gallery JSON request failure as a public warning', async () => {
+  const context = {
+    request: {
+      get: async () => ({
+        ok: () => false,
+        status: () => 503,
+      }),
+    },
+  } as unknown as Parameters<typeof fetchGalleryJson>[0];
+  const result = await fetchGalleryJson(
+    context,
+    'https://example.com/gallery',
+    1_000,
+    'gallery',
+  );
+  assert.equal(result.error, 'HTTP 503');
+  assert.equal(
+    galleryJsonWarning('/gallery', result.error ?? ''),
+    '/gallery: format=json unavailable (HTTP 503)',
+  );
+});
+
+test('fails the CLI for partial crawls while allowing explicit no-crawl mode', () => {
+  assert.equal(extractionExitCode('partial', false), 1);
+  assert.equal(extractionExitCode('failed', false), 1);
+  assert.equal(extractionExitCode('skipped', false), 1);
+  assert.equal(
+    extractionExitCode('skipped', parseArgs(['--no-crawl']).noCrawl),
+    0,
+  );
+  assert.equal(extractionExitCode('complete', false), 0);
 });

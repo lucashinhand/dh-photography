@@ -106,6 +106,7 @@ export interface CrawlResult {
   screenshots: ScreenshotRecord[];
   instagram: string;
   errors: string[];
+  warnings: string[];
   fetchedAt: string;
 }
 
@@ -254,6 +255,7 @@ export interface ExtractionReport {
     sitemapImageEntries: number;
     sitemapUniqueAssets: number;
     errors: string[];
+    warnings: string[];
   };
   inventory: {
     xmlItems: number;
