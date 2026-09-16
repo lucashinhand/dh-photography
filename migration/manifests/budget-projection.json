@@ -1,0 +1,35 @@
+{
+  "N": 1155,
+  "xml_reference_count": 1089,
+  "assets": {
+    "large": {
+      "gallery_weighted_average_bytes": 220692.69421487604,
+      "projected_bytes": 254900061.81818184,
+      "projected_MB": 254.90006181818185,
+      "projected_GiB": 0.23739418184215375,
+      "gallery_weighted_average_ms": 129.73609513911848,
+      "projected_serial_ms": 149845.18988568184,
+      "projected_serial_minutes": 2.4974198314280307
+    },
+    "thumbnail": {
+      "gallery_weighted_average_bytes": 51162.13865932048,
+      "projected_bytes": 59092270.151515156,
+      "projected_MB": 59.09227015151516,
+      "projected_GiB": 0.05503396517738249,
+      "gallery_weighted_average_ms": 34.58335667217631,
+      "projected_serial_ms": 39943.77695636363,
+      "projected_serial_minutes": 0.6657296159393938
+    }
+  },
+  "combined": {
+    "projected_bytes": 313992331.969697,
+    "projected_MB": 313.992331969697,
+    "projected_GiB": 0.29242814701953623,
+    "projected_serial_ms": 189788.96684204548,
+    "projected_serial_minutes": 3.1631494473674246,
+    "with_20_percent_headroom_bytes": 376790798.3636364,
+    "with_20_percent_headroom_MB": 376.7907983636364,
+    "with_20_percent_headroom_plus_25MB_bytes": 401790798.3636364,
+    "with_20_percent_headroom_plus_25MB_MB": 401.7907983636364
+  }
+}
