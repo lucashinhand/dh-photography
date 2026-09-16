@@ -92,6 +92,36 @@ test('sanitizes author and creator account metadata while retaining public conta
   assert.match(sanitized, /david@hahn\.net/);
 });
 
+test('sanitizes executable link schemes while preserving public links', () => {
+  const xml = `<?xml version="1.0"?>
+    <rss xmlns:content="http://purl.org/rss/1.0/modules/content/" xmlns:wp="http://wordpress.org/export/1.2/">
+      <channel>
+        <title>Test</title>
+        <item>
+          <title>about</title><link>/about</link><wp:post_type>page</wp:post_type><wp:status>publish</wp:status>
+          <content:encoded><![CDATA[
+            <p><a href="http://example.com/public">HTTP</a>
+            <a href="#details">Fragment</a>
+            <a href="mailto:david@example.com">Email</a>
+            <a href="tel:+61401143836">Phone</a>
+            <a href="java&#x0a;script:alert(1)">JavaScript</a>
+            <a href="data:text/html,unsafe">Data</a>
+            <a href="vbscript:msgbox(1)">VBScript</a></p>
+          ]]></content:encoded>
+        </item>
+      </channel>
+    </rss>`;
+  const body = parseXmlExport(xml).pages[0]?.bodyHtml ?? '';
+  assert.match(body, /href="https:\/\/example\.com\/public"/);
+  assert.match(body, /href="#details"/);
+  assert.match(body, /href="mailto:david@example\.com"/);
+  assert.match(body, /href="tel:\+61401143836"/);
+  assert.doesNotMatch(
+    body,
+    /href\s*=\s*["'][^"']*(?:javascript|data|vbscript)/i,
+  );
+});
+
 test('normalizes HTTP CDN URLs and builds the bounded rendition probe order', () => {
   const http = normalizeAssetUrl(
     'http://images.squarespace-cdn.com/content/v1/site/asset/file%20name.jpg?format=original#fragment',

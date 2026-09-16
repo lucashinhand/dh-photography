@@ -1,4 +1,4 @@
-import { readFile, readdir, stat } from 'node:fs/promises';
+import { readFile, readdir, stat, lstat } from 'node:fs/promises';
 import { resolve, relative, join } from 'node:path';
 import { createHash } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
@@ -10,10 +10,21 @@ const MAX_BYTES = 750_000_000;
 const MAX_FILE = 50_000_000;
 const errors: string[] = [];
 const root = process.cwd();
-const tracked = execFileSync('git', ['ls-files', '-z'], { encoding: 'utf8' })
-  .split('\0')
-  .filter(Boolean);
+const tracked = [
+  ...new Set(
+    execFileSync(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard', '-z'],
+      { encoding: 'utf8' },
+    )
+      .split('\0')
+      .filter(Boolean),
+  ),
+];
 for (const path of tracked) {
+  const info = await lstat(path);
+  check(!info.isSymbolicLink(), `Unexpected symlink: ${path}`);
+  if (info.isSymbolicLink()) continue;
   check(
     !/^migration\/(?:downloads|private)\//.test(path) &&
       !/^migration\/source\/Squarespace-Wordpress-Export-/.test(path),
@@ -26,6 +37,11 @@ for (const path of tracked) {
   if (!/\.(?:md|json|xml|ts|tsx|js|mjs|astro|ya?ml|css|svg)$/.test(path))
     continue;
   const text = await readFile(path, 'utf8');
+  if (path.startsWith('migration/'))
+    check(
+      !/(?:\/(?:Users|home|private|tmp)\/|[a-z]:[\\/]+Users[\\/]+)/i.test(text),
+      `Local filesystem path in public recovery: ${path}`,
+    );
   check(
     !/(?:gh[pousr]_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{50,}|AKIA[A-Z0-9]{16}|-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----)/.test(
       text,
@@ -210,22 +226,10 @@ check(
   `Unreferenced assets: ${stored.length} files, ${checked.size} referenced.`,
 );
 check(imageBytes < MAX_BYTES, `Serving images exceed 750 MB: ${imageBytes}`);
-const sourceFiles = (
-  await Promise.all(
-    ['src', 'public', 'migration', 'docs', 'scripts', 'tests', '.github'].map(
-      files,
-    ),
-  )
-)
-  .flat()
-  .filter(
-    (path) =>
-      !/^migration\/(?:downloads|private)\//.test(path) &&
-      !/^migration\/source\/Squarespace-Wordpress-Export-/.test(path),
-  );
+const sourceFiles = tracked;
 let repositoryBytes = 0;
 for (const path of sourceFiles) {
-  const size = (await stat(path)).size;
+  const size = (await lstat(path)).size;
   repositoryBytes += size;
   check(size < MAX_FILE, `File exceeds 50 MB: ${path}`);
 }

@@ -17,6 +17,8 @@ import {
   estimateServingBytes,
   fallbackUrls,
   inspectImage,
+  assertEncodedFileSize,
+  MAX_SERVING_FILE_BYTES,
   processSite,
   type InputSite,
 } from '../scripts/process-images.js';
@@ -56,6 +58,76 @@ function responseFor(
     status,
     headers: { 'content-type': contentType },
   });
+}
+
+async function writeMinimalProcessorFixture(directory: string): Promise<{
+  sitePath: string;
+  assetsPath: string;
+  manifestPath: string;
+  budgetProjectionPath: string;
+  downloadsDirectory: string;
+  outputDirectory: string;
+}> {
+  const sitePath = path.join(directory, 'site.json');
+  const assetsPath = path.join(directory, 'assets.json');
+  const manifestPath = path.join(directory, 'images.json');
+  const budgetProjectionPath = path.join(directory, 'budget-projection.json');
+  const downloadsDirectory = path.join(directory, 'downloads');
+  const outputDirectory = path.join(directory, 'public', 'images');
+  const site: InputSite = {
+    name: 'David Hahn Photography',
+    description: '',
+    email: '',
+    phone: '',
+    instagram: '',
+    pages: [],
+    photos: {},
+  };
+  const assets = {
+    schemaVersion: 1,
+    generatedAt: '2026-09-16T00:00:00.000Z',
+    source: {
+      baseUrl: 'https://cdn.example.test',
+      xmlPath: 'export.xml',
+      xmlSha256: 'test',
+    },
+    policy: {
+      sourceProtocol: 'https' as const,
+      requestedWidths: [2500, 1500, 1000, 750, 500, 300, 100] as const,
+      preferredWidth: 2500 as const,
+      maxCommittedWidth: 2500 as const,
+      originalDownloads: 'excluded' as const,
+    },
+    assets: [
+      {
+        id: 'photo-one',
+        identity: 'photo-one',
+        sourceUrl: 'https://cdn.example.test/photo.jpg',
+        originalFilename: 'photo.jpg',
+        filename: 'photo.jpg',
+        pageSlugs: [],
+        placementCount: 0,
+        sourceUrls: ['https://cdn.example.test/photo.jpg'],
+        candidateUrls: [],
+        observed: [],
+        metadataSources: [],
+      },
+    ],
+  };
+  await writeFile(sitePath, `${JSON.stringify(site, null, 2)}\n`);
+  await writeFile(assetsPath, `${JSON.stringify(assets, null, 2)}\n`);
+  await writeFile(
+    budgetProjectionPath,
+    `${JSON.stringify({ assets: { large: { gallery_weighted_average_bytes: 100 }, thumbnail: { gallery_weighted_average_bytes: 50 } } }, null, 2)}\n`,
+  );
+  return {
+    sitePath,
+    assetsPath,
+    manifestPath,
+    budgetProjectionPath,
+    downloadsDirectory,
+    outputDirectory,
+  };
 }
 
 test('fallback URLs use HTTPS and the bounded Squarespace format sequence', () => {
@@ -105,6 +177,20 @@ test('small landscape images remain at source size and thumbnails derive from la
   assert.equal(largeMetadata.height, 80);
   assert.equal(thumbnailMetadata.width, 120);
   assert.equal(thumbnailMetadata.height, 80);
+});
+
+test('encoded serving files must remain below the per-file cap', () => {
+  assert.doesNotThrow(() =>
+    assertEncodedFileSize(MAX_SERVING_FILE_BYTES - 1, 'large'),
+  );
+  assert.throws(
+    () => assertEncodedFileSize(MAX_SERVING_FILE_BYTES, 'large'),
+    /must be smaller than 50000000 bytes/,
+  );
+  assert.throws(
+    () => assertEncodedFileSize(MAX_SERVING_FILE_BYTES + 1, 'thumbnail'),
+    /thumbnail.*must be smaller than 50000000 bytes/,
+  );
 });
 
 test('inspection trusts decoded format and dimensions rather than the URL extension', async () => {
@@ -529,6 +615,8 @@ test('failed downloads write a resumable failure manifest before aborting', asyn
   const assetsPath = path.join(directory, 'assets.json');
   const manifestPath = path.join(directory, 'images.json');
   const budgetProjectionPath = path.join(directory, 'budget-projection.json');
+  const downloadsDirectory = path.join(directory, 'downloads');
+  const outputDirectory = path.join(directory, 'public', 'images');
   const site: InputSite = {
     name: 'David Hahn Photography',
     description: '',
@@ -575,6 +663,65 @@ test('failed downloads write a resumable failure manifest before aborting', asyn
     budgetProjectionPath,
     `${JSON.stringify({ assets: { large: { gallery_weighted_average_bytes: 100 }, thumbnail: { gallery_weighted_average_bytes: 50 } } }, null, 2)}\n`,
   );
+  await mkdir(outputDirectory, { recursive: true });
+  await writeFile(path.join(outputDirectory, 'old-content.webp'), 'old-large');
+  await writeFile(
+    path.join(outputDirectory, 'old-content-thumb.webp'),
+    'old-thumbnail',
+  );
+  await writeFile(path.join(outputDirectory, 'unrelated.webp'), 'keep');
+  await writeFile(
+    manifestPath,
+    `${JSON.stringify(
+      {
+        version: 1,
+        generatedAt: '2026-09-15T00:00:00.000Z',
+        assetManifestPath: assetsPath,
+        sitePath,
+        outputDirectory,
+        downloadDirectory: downloadsDirectory,
+        sourceCount: 1,
+        sourceContentCount: 1,
+        uniqueContentCount: 1,
+        servingBytes: 19,
+        servingBudgetBytes: 750_000_000,
+        images: [
+          {
+            contentHash: 'old-content',
+            photoIds: ['old-photo'],
+            sourceUrls: [],
+            sourceVariants: [],
+            selectedUrl: 'https://cdn.example.test/old.jpg',
+            sourceBytes: 1,
+            sourceMime: 'image/jpeg',
+            sourceFormat: 'jpeg',
+            sourceWidth: 1,
+            sourceHeight: 1,
+            large: {
+              path: '/images/old-content.webp',
+              bytes: 9,
+              sha256: 'old-large',
+              width: 1,
+              height: 1,
+              mime: 'image/webp',
+            },
+            thumbnail: {
+              path: '/images/old-content-thumb.webp',
+              bytes: 10,
+              sha256: 'old-thumbnail',
+              width: 1,
+              height: 1,
+              mime: 'image/webp',
+            },
+            status: 'processed',
+          },
+        ],
+        status: 'complete',
+      },
+      null,
+      2,
+    )}\n`,
+  );
 
   await assert.rejects(
     processSite({
@@ -583,8 +730,8 @@ test('failed downloads write a resumable failure manifest before aborting', asyn
       budgetProjectionPath,
       sitePath,
       imagesManifestPath: manifestPath,
-      downloadsDirectory: path.join(directory, 'downloads'),
-      outputDirectory: path.join(directory, 'public', 'images'),
+      downloadsDirectory,
+      outputDirectory,
       retryCount: 1,
       fetchImpl: async () => responseFor(Buffer.from('not an image')),
     }),
@@ -592,13 +739,164 @@ test('failed downloads write a resumable failure manifest before aborting', asyn
   );
   const failure = JSON.parse(await readFile(manifestPath, 'utf8')) as {
     status: string;
-    images: unknown[];
+    images: Array<{ contentHash: string }>;
     failures: Array<{ photoIds: string[]; error: string }>;
   };
   assert.equal(failure.status, 'failed');
-  assert.deepEqual(failure.images, []);
+  assert.equal(failure.images[0]?.contentHash, 'old-content');
+  await stat(path.join(outputDirectory, 'old-content.webp'));
+  await stat(path.join(outputDirectory, 'old-content-thumb.webp'));
+  await stat(path.join(outputDirectory, 'unrelated.webp'));
   assert.deepEqual(failure.failures[0]?.photoIds, ['broken-photo']);
   assert.match(failure.failures[0]?.error ?? '', /Unable to download/);
+
+  const source = await jpegBuffer(96, 64);
+  const retry = await processSite({
+    mode: 'run',
+    assetManifestPath: assetsPath,
+    budgetProjectionPath,
+    sitePath,
+    imagesManifestPath: manifestPath,
+    downloadsDirectory,
+    outputDirectory,
+    retryCount: 1,
+    fetchImpl: async () => responseFor(source),
+    now: () => new Date('2026-09-16T00:00:00.000Z'),
+  });
+  assert.equal(retry.manifest?.status, 'complete');
+  assert.equal(retry.manifest?.images.length, 1);
+  await assert.rejects(stat(path.join(outputDirectory, 'old-content.webp')));
+  await assert.rejects(
+    stat(path.join(outputDirectory, 'old-content-thumb.webp')),
+  );
+  await stat(path.join(outputDirectory, 'unrelated.webp'));
+});
+
+test('pending transactions recover output and manifest-before-site interruptions', async () => {
+  const directory = await tempDirectory();
+  const fixture = await writeMinimalProcessorFixture(directory);
+  const source = await jpegBuffer(96, 64);
+  const options = {
+    mode: 'run' as const,
+    assetManifestPath: fixture.assetsPath,
+    budgetProjectionPath: fixture.budgetProjectionPath,
+    sitePath: fixture.sitePath,
+    imagesManifestPath: fixture.manifestPath,
+    downloadsDirectory: fixture.downloadsDirectory,
+    outputDirectory: fixture.outputDirectory,
+    retryCount: 1,
+    now: () => new Date('2026-09-16T00:00:00.000Z'),
+  };
+
+  await processSite({
+    ...options,
+    fetchImpl: async () => responseFor(source),
+  });
+  const previousManifest = JSON.parse(
+    await readFile(fixture.manifestPath, 'utf8'),
+  ) as Record<string, unknown> & { images: Array<Record<string, unknown>> };
+  const previousSite = JSON.parse(
+    await readFile(fixture.sitePath, 'utf8'),
+  ) as InputSite;
+
+  const orphanPath = path.join(fixture.outputDirectory, 'interrupted.webp');
+  const stageDirectory = path.join(
+    fixture.outputDirectory,
+    '.staging-interrupted-output',
+  );
+  await writeFile(orphanPath, 'orphan');
+  await mkdir(stageDirectory, { recursive: true });
+  await writeFile(path.join(stageDirectory, 'leftover.webp'), 'leftover');
+  const outputJournal = {
+    version: 1,
+    transactionId: 'interrupted-output',
+    outputDirectory: fixture.outputDirectory,
+    sitePath: fixture.sitePath,
+    stageDirectory,
+    outputPaths: ['/images/interrupted.webp'],
+    previousManifest,
+    nextManifest: { ...previousManifest, transactionId: 'interrupted-output' },
+    previousSite,
+    nextSite: previousSite,
+  };
+  await writeFile(
+    `${fixture.manifestPath}.pending`,
+    `${JSON.stringify(outputJournal, null, 2)}\n`,
+  );
+
+  await processSite({
+    ...options,
+    fetchImpl: async () => {
+      throw new Error('verified source cache should avoid a network request');
+    },
+  });
+  await assert.rejects(stat(orphanPath));
+  await assert.rejects(stat(stageDirectory));
+  await assert.rejects(stat(`${fixture.manifestPath}.pending`));
+
+  const manifestBeforeSite = JSON.parse(
+    await readFile(fixture.manifestPath, 'utf8'),
+  ) as Record<string, unknown> & { images: Array<Record<string, unknown>> };
+  const siteBefore = JSON.parse(
+    await readFile(fixture.sitePath, 'utf8'),
+  ) as InputSite;
+  const nextSite: InputSite = {
+    ...siteBefore,
+    description: 'recovered metadata',
+  };
+  const nextManifest = {
+    ...manifestBeforeSite,
+    transactionId: 'manifest-before-site',
+  };
+  const metadataStageDirectory = path.join(
+    fixture.outputDirectory,
+    '.staging-manifest-before-site',
+  );
+  await mkdir(metadataStageDirectory, { recursive: true });
+  await writeFile(
+    `${fixture.manifestPath}.pending`,
+    `${JSON.stringify(
+      {
+        version: 1,
+        transactionId: 'manifest-before-site',
+        outputDirectory: fixture.outputDirectory,
+        sitePath: fixture.sitePath,
+        stageDirectory: metadataStageDirectory,
+        outputPaths: [
+          ...manifestBeforeSite.images.flatMap((image) => [
+            (image.large as { path: string }).path,
+            (image.thumbnail as { path: string }).path,
+          ]),
+        ],
+        previousManifest: manifestBeforeSite,
+        nextManifest,
+        previousSite: siteBefore,
+        nextSite,
+      },
+      null,
+      2,
+    )}\n`,
+  );
+  // Simulate the manifest rename having succeeded immediately before the
+  // process stopped, while site.json still contains the previous snapshot.
+  await writeFile(
+    fixture.manifestPath,
+    `${JSON.stringify(nextManifest, null, 2)}\n`,
+  );
+
+  const recovered = await processSite({
+    ...options,
+    fetchImpl: async () => {
+      throw new Error('verified source cache should avoid a network request');
+    },
+  });
+  assert.equal(recovered.site?.description, 'recovered metadata');
+  assert.equal(
+    JSON.parse(await readFile(fixture.sitePath, 'utf8')).description,
+    'recovered metadata',
+  );
+  await assert.rejects(stat(metadataStageDirectory));
+  await assert.rejects(stat(`${fixture.manifestPath}.pending`));
 });
 
 test('preflight estimates discovered unique sources with the fixed overhead and safety factor', async () => {

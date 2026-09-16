@@ -15,3 +15,8 @@ migration/private/
 .agents/
 .claude/
 skills-lock.json
+# Interrupted image imports keep a local recovery journal until the next run.
+migration/manifests/*.pending
+migration/manifests/*.tmp-*
+src/content/*.tmp-*
+public/images/.staging-*/

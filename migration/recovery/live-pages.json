@@ -72881,42 +72881,42 @@
       "viewport": "desktop",
       "slug": "portfolio",
       "path": "/portfolio",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/gallery-desktop-portfolio.jpg"
+      "file": "migration/references/screenshots/gallery-desktop-portfolio.jpg"
     },
     {
       "layout": "gallery",
       "viewport": "mobile",
       "slug": "portfolio",
       "path": "/portfolio",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/gallery-mobile-portfolio.jpg"
+      "file": "migration/references/screenshots/gallery-mobile-portfolio.jpg"
     },
     {
       "layout": "text",
       "viewport": "desktop",
       "slug": "contact",
       "path": "/contact",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/text-desktop-contact.jpg"
+      "file": "migration/references/screenshots/text-desktop-contact.jpg"
     },
     {
       "layout": "text",
       "viewport": "mobile",
       "slug": "contact",
       "path": "/contact",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/text-mobile-contact.jpg"
+      "file": "migration/references/screenshots/text-mobile-contact.jpg"
     },
     {
       "layout": "mixed",
       "viewport": "desktop",
       "slug": "about",
       "path": "/about",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/mixed-desktop-about.jpg"
+      "file": "migration/references/screenshots/mixed-desktop-about.jpg"
     },
     {
       "layout": "mixed",
       "viewport": "mobile",
       "slug": "about",
       "path": "/about",
-      "file": "/Users/lucashahn/Github/dh-photography/migration/references/screenshots/mixed-mobile-about.jpg"
+      "file": "migration/references/screenshots/mixed-mobile-about.jpg"
     }
   ],
   "instagram": "https://instagram.com/davidhahn_photography",
@@ -72926,5 +72926,6 @@
       "sourceUrl": "https://recorder-nonagon-24ym.squarespace.com/contact?format=json",
       "field": "website.socialAccounts[].profileUrl"
     }
-  ]
+  ],
+  "warnings": []
 }

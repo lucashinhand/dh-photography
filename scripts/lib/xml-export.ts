@@ -147,6 +147,32 @@ function nearestCaption(
   return parentCaption;
 }
 
+// eslint-disable-next-line no-control-regex -- Strip URL control characters before validating the scheme.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/**
+ * Keep recovered links navigable while preventing scheme-based URL execution.
+ * HTTP links are upgraded because the recovered site is served over HTTPS.
+ */
+function safeHref(value: string): string | undefined {
+  const cleaned = value.replace(CONTROL_CHARACTERS, '').trim();
+  if (!cleaned) return '';
+
+  const scheme = cleaned.match(/^([a-z][a-z\d+.-]*):/i)?.[1].toLowerCase();
+  if (
+    scheme &&
+    scheme !== 'http' &&
+    scheme !== 'https' &&
+    scheme !== 'mailto' &&
+    scheme !== 'tel'
+  ) {
+    return undefined;
+  }
+  if (cleaned.startsWith('//')) return `https:${cleaned}`;
+  if (scheme === 'http') return cleaned.replace(/^http:/i, 'https:');
+  return cleaned;
+}
+
 function sanitizePublicHtml(input: string): string {
   const $ = load(input, {}, false);
   $(
@@ -171,10 +197,15 @@ function sanitizePublicHtml(input: string): string {
     }
 
     const href = $(element).attr('href');
-    if (href && /squarespace(?:-cdn)?\.com/i.test(href)) {
-      $(element).replaceWith($(element).contents());
-    } else if (href && /^http:\/\//i.test(href)) {
-      $(element).attr('href', href.replace(/^http:/i, 'https:'));
+    if (href !== undefined) {
+      const sanitizedHref = safeHref(href);
+      if (sanitizedHref === undefined) {
+        $(element).removeAttr('href');
+      } else if (/squarespace(?:-cdn)?\.com/i.test(sanitizedHref)) {
+        $(element).replaceWith($(element).contents());
+      } else {
+        $(element).attr('href', sanitizedHref);
+      }
     }
   });
 

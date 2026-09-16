@@ -10,7 +10,9 @@
     "sitemapPages": 18,
     "sitemapImageEntries": 1115,
     "sitemapUniqueAssets": 1100,
-    "errors": []
+    "errors": [],
+    "warnings": [],
+    "orderPolicy": "live"
   },
   "inventory": {
     "xmlItems": 1094,

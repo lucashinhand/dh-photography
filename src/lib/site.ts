@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
+import { load } from 'cheerio';
+
 import type {
   Placement,
   Photo,
@@ -222,13 +224,48 @@ export function assetUrl(source: string, base = basePath()): string {
   return withBase(source, base);
 }
 
+// eslint-disable-next-line no-control-regex -- Strip URL control characters before validating the scheme.
+const CONTROL_CHARACTERS = /[\u0000-\u001f\u007f-\u009f]/g;
+
+/** Keep authored links usable without allowing executable URL schemes. */
+function safeHref(value: string): string | undefined {
+  const cleaned = value.replace(CONTROL_CHARACTERS, '').trim();
+  if (!cleaned) return '';
+
+  const scheme = cleaned.match(/^([a-z][a-z\d+.-]*):/i)?.[1].toLowerCase();
+  if (
+    scheme &&
+    scheme !== 'http' &&
+    scheme !== 'https' &&
+    scheme !== 'mailto' &&
+    scheme !== 'tel'
+  ) {
+    return undefined;
+  }
+  if (cleaned.startsWith('//')) return `https:${cleaned}`;
+  if (scheme === 'http') return cleaned.replace(/^http:/i, 'https:');
+  return cleaned;
+}
+
+function sanitizeHrefAttributes(html: string): string {
+  const $ = load(html, {}, false);
+  $('*').each((_, element) => {
+    const href = $(element).attr('href');
+    if (href === undefined) return;
+    const sanitized = safeHref(href);
+    if (sanitized === undefined) $(element).removeAttr('href');
+    else $(element).attr('href', sanitized);
+  });
+  return ($('body').html() ?? $.root().html() ?? '').trim();
+}
+
 /**
  * Body HTML is authored by the migration extractor. Remove executable/embed
  * elements and remote images so the static site never depends on Squarespace
  * at runtime. Gallery placements render recovered photographs separately.
  */
 export function safeBodyHtml(html: string): string {
-  return html
+  const stripped = html
     .replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi, '')
     .replace(/<iframe\b[^>]*>[\s\S]*?<\/iframe>/gi, '')
     .replace(/<object\b[^>]*>[\s\S]*?<\/object>/gi, '')
@@ -239,7 +276,8 @@ export function safeBodyHtml(html: string): string {
     .replace(
       /\s(?:href|src)\s*=\s*["'][^"']*squarespace(?:-cdn)?\.com[^"']*["']/gi,
       '',
-    )
+    );
+  return sanitizeHrefAttributes(stripped)
     .replace(/<h1\b/gi, '<h2')
     .replace(/<\/h1>/gi, '</h2>')
     .replace(/\son[a-z-]+\s*=\s*(?:"[^"]*"|'[^']*')/gi, '');

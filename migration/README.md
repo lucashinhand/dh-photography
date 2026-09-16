@@ -23,7 +23,7 @@ npm run migration:report
 npm run validate
 ```
 
-The importer uses `migration/manifests/assets.json`, updates `src/content/site.json`, and writes `migration/manifests/images.json`. Source bytes are cached in ignored `migration/downloads/`; resumptions verify checksums. Do not run extraction and import concurrently against the same content file. Do not refresh the established recovery in place without reviewing the resulting changes.
+The importer uses `migration/manifests/assets.json`, updates `src/content/site.json`, and writes `migration/manifests/images.json`. Source bytes are cached in ignored `migration/downloads/`; resumptions verify checksums. An interrupted import may leave a local `.pending` transaction journal beside the image manifest; preserve it and rerun the importer so it can reconcile its own staged outputs. Do not run extraction and import concurrently against the same content file. Do not refresh the established recovery in place without reviewing the resulting changes.
 
 ## Image policy
 

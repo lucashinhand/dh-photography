@@ -48,6 +48,29 @@ test('recovered body HTML removes embeds and keeps one page heading hierarchy', 
   assert.match(html, /<p>Copy<\/p>/);
 });
 
+test('recovered body HTML keeps safe links and removes executable schemes', () => {
+  const html = safeBodyHtml(
+    '<a href="http://example.com/public">HTTP</a>' +
+      '<a href="/about/">Relative</a>' +
+      '<a href="#details">Fragment</a>' +
+      '<a href="mailto:david@example.com">Email</a>' +
+      '<a href="tel:+61401143836">Phone</a>' +
+      '<a href="java\u0000script:alert(1)">JavaScript</a>' +
+      '<a href="java&#115;cript:alert(2)">Encoded JavaScript</a>' +
+      '<a href="data:text/html,unsafe">Data</a>' +
+      '<a href="vbscript:msgbox(1)">VBScript</a>',
+  );
+  assert.match(html, /href="https:\/\/example\.com\/public"/);
+  assert.match(html, /href="\/about\/"/);
+  assert.match(html, /href="#details"/);
+  assert.match(html, /href="mailto:david@example\.com"/);
+  assert.match(html, /href="tel:\+61401143836"/);
+  assert.doesNotMatch(
+    html,
+    /href\s*=\s*["'][^"']*(?:javascript|data|vbscript)/i,
+  );
+});
+
 test('production loader fails closed for missing or malformed extracted content', () => {
   const contentPath = path.resolve(
     'migration/recovery/squarespace-export-sanitised.xml',

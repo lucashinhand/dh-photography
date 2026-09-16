@@ -20,6 +20,7 @@ export const LARGE_QUALITY = 85;
 export const THUMB_QUALITY = 80;
 export const WEBP_EFFORT = 4;
 export const MAX_DOWNLOAD_BYTES = 50_000_000;
+export const MAX_SERVING_FILE_BYTES = 50_000_000;
 export const MAX_SERVING_BYTES = 750_000_000;
 export const DOWNLOAD_CONCURRENCY = 4;
 export const ENCODE_CONCURRENCY = 2;
@@ -42,6 +43,7 @@ const DEFAULT_BUDGET_PROJECTION_PATH = path.join(
 );
 const DEFAULT_SITE_PATH = path.join('src', 'content', 'site.json');
 const DEFAULT_IMAGES_PATH = path.join('migration', 'manifests', 'images.json');
+const PENDING_MANIFEST_SUFFIX = '.pending';
 const DEFAULT_DOWNLOAD_DIR = path.join('migration', 'downloads');
 const DEFAULT_OUTPUT_DIR = path.join('public', 'images');
 
@@ -129,6 +131,8 @@ export interface ImagesManifest {
   status?: 'complete' | 'failed';
   failures?: Array<{ photoIds: string[]; sourceUrl: string; error: string }>;
   error?: string;
+  transactionId?: string;
+  pendingCleanupPaths?: string[];
 }
 
 export interface PreflightPlan {
@@ -263,6 +267,24 @@ interface ServingGroup {
   contentHash: string;
   pair: EncodedPair;
   members: EncodedResult[];
+}
+
+interface TransactionJournal {
+  version: 1;
+  transactionId: string;
+  outputDirectory: string;
+  sitePath: string;
+  stageDirectory: string;
+  outputPaths: string[];
+  previousManifest: ImagesManifest | null;
+  nextManifest: ImagesManifest;
+  previousSite: InputSite;
+  nextSite: InputSite;
+}
+
+interface RecoveryState {
+  manifest: ImagesManifest | undefined;
+  site: InputSite;
 }
 
 function asPositiveInteger(
@@ -808,6 +830,7 @@ async function encodeWebp(
   input: string | Buffer,
   width: number,
   quality: number,
+  label: string,
 ): Promise<EncodedImage> {
   const { data, info } = await sharp(input, { failOn: 'error' })
     .rotate()
@@ -816,6 +839,7 @@ async function encodeWebp(
     .webp({ quality, effort: WEBP_EFFORT })
     .toBuffer({ resolveWithObject: true });
   const output = Buffer.from(data);
+  assertEncodedFileSize(output.byteLength, label);
   const metadata = await inspectImage(output);
   if (metadata.format !== 'webp' || metadata.mime !== 'image/webp') {
     throw new ImageProcessorError('Sharp did not produce a WebP image');
@@ -846,11 +870,31 @@ async function encodeWebp(
 export async function encodeImagePair(
   sourcePath: string,
 ): Promise<EncodedPair> {
-  const large = await encodeWebp(sourcePath, LARGE_WIDTH, LARGE_QUALITY);
+  const large = await encodeWebp(
+    sourcePath,
+    LARGE_WIDTH,
+    LARGE_QUALITY,
+    'large',
+  );
   // The thumbnail must derive from the already oriented, colour-converted
   // large image so both outputs share exactly the same crop and orientation.
-  const thumbnail = await encodeWebp(large.data, THUMB_WIDTH, THUMB_QUALITY);
+  const thumbnail = await encodeWebp(
+    large.data,
+    THUMB_WIDTH,
+    THUMB_QUALITY,
+    'thumbnail',
+  );
   return { large, thumbnail };
+}
+
+export function assertEncodedFileSize(bytes: number, label: string): void {
+  if (!Number.isFinite(bytes) || bytes < 0)
+    throw new ImageProcessorError(`Invalid encoded ${label} byte count`);
+  if (bytes >= MAX_SERVING_FILE_BYTES) {
+    throw new ImageProcessorError(
+      `Encoded ${label} file is ${bytes} bytes; serving files must be smaller than ${MAX_SERVING_FILE_BYTES} bytes`,
+    );
+  }
 }
 
 async function writeAtomic(
@@ -953,6 +997,8 @@ async function readCachedEncodedPair(
     ) {
       return undefined;
     }
+    assertEncodedFileSize(largeData.byteLength, 'large');
+    assertEncodedFileSize(thumbnailData.byteLength, 'thumbnail');
     const [largeInspection, thumbnailInspection] = await Promise.all([
       inspectImage(largeData),
       inspectImage(thumbnailData),
@@ -1006,34 +1052,191 @@ async function commitStagedPair(
   );
 }
 
-function knownManifestOutputPaths(
-  outputDirectory: string,
+function manifestOutputPublicPaths(
   manifest: ImagesManifest | undefined,
 ): Set<string> {
   const paths = new Set<string>();
   for (const image of manifest?.images ?? []) {
     for (const publicPath of [image.large.path, image.thumbnail.path]) {
       const normalised = publicPath.replaceAll('\\', '/');
-      const basename = path.basename(normalised);
-      if (!/^\/images\/[A-Za-z0-9._-]+\.webp$/.test(normalised)) continue;
-      paths.add(path.join(outputDirectory, basename));
+      if (/^\/images\/[A-Za-z0-9._-]+\.webp$/.test(normalised))
+        paths.add(normalised);
     }
   }
   return paths;
 }
 
-async function prunePreviousManifestOutputs(
+function safeOutputPath(
   outputDirectory: string,
-  previousManifest: ImagesManifest | undefined,
-  currentManifest: ImagesManifest,
+  publicPath: string,
+): string | undefined {
+  const normalised = publicPath.replaceAll('\\', '/');
+  if (!/^\/images\/[A-Za-z0-9._-]+\.webp$/.test(normalised)) return undefined;
+  return path.join(outputDirectory, path.basename(normalised));
+}
+
+async function pruneOutputPaths(
+  outputDirectory: string,
+  publicPaths: Iterable<string>,
 ): Promise<void> {
-  const previous = knownManifestOutputPaths(outputDirectory, previousManifest);
-  const current = knownManifestOutputPaths(outputDirectory, currentManifest);
-  await Promise.all(
-    [...previous]
-      .filter((filePath) => !current.has(filePath))
-      .map((filePath) => rm(filePath, { force: true })),
+  const files = [...new Set(publicPaths)]
+    .map((publicPath) => safeOutputPath(outputDirectory, publicPath))
+    .filter((filePath): filePath is string => Boolean(filePath));
+  await Promise.all(files.map((filePath) => rm(filePath, { force: true })));
+}
+
+function safeStageDirectory(
+  outputDirectory: string,
+  stageDirectory: string,
+  transactionId: string,
+): string | undefined {
+  const outputRoot = path.resolve(outputDirectory);
+  const stageRoot = path.resolve(stageDirectory);
+  if (path.dirname(stageRoot) !== outputRoot) return undefined;
+  if (path.basename(stageRoot) !== `.staging-${transactionId}`)
+    return undefined;
+  return stageRoot;
+}
+
+function pendingManifestPath(imagesManifestPath: string): string {
+  return `${imagesManifestPath}${PENDING_MANIFEST_SUFFIX}`;
+}
+
+function stableJson(value: unknown): string {
+  if (value === undefined) return 'undefined';
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value))
+    return `[${value.map((item) => stableJson(item)).join(',')}]`;
+  const record = value as Record<string, unknown>;
+  return `{${Object.keys(record)
+    .sort()
+    .map((key) => `${JSON.stringify(key)}:${stableJson(record[key])}`)
+    .join(',')}}`;
+}
+
+function sameSnapshot(left: unknown, right: unknown): boolean {
+  return stableJson(left) === stableJson(right);
+}
+
+async function readOptionalJson<T>(filePath: string): Promise<T | undefined> {
+  try {
+    return await readJson<T>(filePath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return undefined;
+    throw error;
+  }
+}
+
+function transactionJournal(value: unknown): TransactionJournal {
+  if (!value || typeof value !== 'object')
+    throw new ImageProcessorError('Pending image transaction is malformed');
+  const journal = value as Partial<TransactionJournal>;
+  if (
+    journal.version !== 1 ||
+    typeof journal.transactionId !== 'string' ||
+    typeof journal.outputDirectory !== 'string' ||
+    typeof journal.sitePath !== 'string' ||
+    typeof journal.stageDirectory !== 'string' ||
+    !Array.isArray(journal.outputPaths) ||
+    journal.outputPaths.some((publicPath) => typeof publicPath !== 'string') ||
+    !journal.nextManifest ||
+    typeof journal.nextManifest !== 'object' ||
+    Array.isArray(journal.nextManifest) ||
+    !journal.previousSite ||
+    typeof journal.previousSite !== 'object' ||
+    Array.isArray(journal.previousSite) ||
+    !journal.nextSite ||
+    typeof journal.nextSite !== 'object' ||
+    Array.isArray(journal.nextSite)
+  ) {
+    throw new ImageProcessorError('Pending image transaction is malformed');
+  }
+  return journal as TransactionJournal;
+}
+
+async function recoverPendingTransaction(
+  imagesManifestPath: string,
+  sitePath: string,
+  outputDirectory: string,
+  currentManifest: ImagesManifest | undefined,
+  currentSite: InputSite,
+): Promise<RecoveryState> {
+  const journalPath = pendingManifestPath(imagesManifestPath);
+  const rawJournal = await readOptionalJson<unknown>(journalPath);
+  if (rawJournal === undefined)
+    return { manifest: currentManifest, site: currentSite };
+  const journal = transactionJournal(rawJournal);
+  const stageDirectory = safeStageDirectory(
+    outputDirectory,
+    journal.stageDirectory,
+    journal.transactionId,
   );
+  if (path.resolve(journal.outputDirectory) !== path.resolve(outputDirectory)) {
+    throw new ImageProcessorError(
+      `Pending image transaction targets a different output directory: ${journal.outputDirectory}`,
+    );
+  }
+  if (path.resolve(journal.sitePath) !== path.resolve(sitePath)) {
+    throw new ImageProcessorError(
+      `Pending image transaction targets a different site path: ${journal.sitePath}`,
+    );
+  }
+
+  const manifestPublished =
+    currentManifest?.status === 'complete' &&
+    currentManifest.transactionId === journal.transactionId;
+  const sitePublished =
+    !sameSnapshot(journal.previousSite, journal.nextSite) &&
+    sameSnapshot(currentSite, journal.nextSite);
+  if (manifestPublished || sitePublished) {
+    // Either metadata file may have been written immediately before an
+    // interruption. Complete both from the journal before removing it.
+    await writeAtomic(
+      imagesManifestPath,
+      `${JSON.stringify(journal.nextManifest, null, 2)}\n`,
+    );
+    await writeAtomic(
+      sitePath,
+      `${JSON.stringify(journal.nextSite, null, 2)}\n`,
+    );
+    if (stageDirectory)
+      await rm(stageDirectory, { recursive: true, force: true });
+    await rm(journalPath, { force: true });
+    return { manifest: journal.nextManifest, site: journal.nextSite };
+  }
+
+  const protectedPaths = new Set(
+    manifestOutputPublicPaths(
+      currentManifest ?? journal.previousManifest ?? undefined,
+    ),
+  );
+  await pruneOutputPaths(
+    outputDirectory,
+    journal.outputPaths.filter((publicPath) => !protectedPaths.has(publicPath)),
+  );
+  if (stageDirectory)
+    await rm(stageDirectory, { recursive: true, force: true });
+  await rm(journalPath, { force: true });
+  return {
+    manifest: currentManifest ?? journal.previousManifest ?? undefined,
+    site: currentSite,
+  };
+}
+
+async function recoverPendingCleanup(
+  imagesManifestPath: string,
+  outputDirectory: string,
+  manifest: ImagesManifest | undefined,
+): Promise<ImagesManifest | undefined> {
+  if (!manifest?.pendingCleanupPaths?.length) return manifest;
+  await pruneOutputPaths(outputDirectory, manifest.pendingCleanupPaths);
+  const cleaned: ImagesManifest = { ...manifest };
+  delete cleaned.pendingCleanupPaths;
+  await writeAtomic(
+    imagesManifestPath,
+    `${JSON.stringify(cleaned, null, 2)}\n`,
+  );
+  return cleaned;
 }
 
 function publicImagePath(contentHash: string, thumbnail = false): string {
@@ -1182,7 +1385,7 @@ export async function processSite(
   const sitePath = options.sitePath ?? DEFAULT_SITE_PATH;
   const mode = options.mode ?? 'preflight';
   const assetManifest = await readJson<InputAssetManifest>(assetManifestPath);
-  const site = await readJson<InputSite>(sitePath);
+  let site = await readJson<InputSite>(sitePath);
   const budgetProjectionPath =
     options.budgetProjectionPath ?? DEFAULT_BUDGET_PROJECTION_PATH;
   const sampleSize = options.sampleSize ?? PREFLIGHT_SAMPLE_SIZE;
@@ -1219,13 +1422,23 @@ export async function processSite(
   const maxDownloadBytes = options.maxDownloadBytes ?? MAX_DOWNLOAD_BYTES;
   const maxServingBytes = options.maxServingBytes ?? MAX_SERVING_BYTES;
   const now = options.now ?? (() => new Date());
+  let existingManifest =
+    await readOptionalJson<ImagesManifest>(imagesManifestPath);
+  const recovery = await recoverPendingTransaction(
+    imagesManifestPath,
+    sitePath,
+    outputDirectory,
+    existingManifest,
+    site,
+  );
+  existingManifest = recovery.manifest;
+  site = recovery.site;
+  existingManifest = await recoverPendingCleanup(
+    imagesManifestPath,
+    outputDirectory,
+    existingManifest,
+  );
   const groups = assetSourceGroups(assetManifest);
-  let existingManifest: ImagesManifest | undefined;
-  try {
-    existingManifest = await readJson<ImagesManifest>(imagesManifestPath);
-  } catch {
-    existingManifest = undefined;
-  }
   const existingImages = new Map<string, ImageManifestImage>();
   for (const image of existingManifest?.images ?? []) {
     existingImages.set(image.contentHash, image);
@@ -1274,10 +1487,13 @@ export async function processSite(
       outputDirectory,
       downloadDirectory: downloadsDirectory,
       sourceCount: assetManifest.assets.length,
-      uniqueContentCount: 0,
-      servingBytes: 0,
+      ...(existingManifest?.sourceContentCount === undefined
+        ? {}
+        : { sourceContentCount: existingManifest.sourceContentCount }),
+      uniqueContentCount: existingManifest?.uniqueContentCount ?? 0,
+      servingBytes: existingManifest?.servingBytes ?? 0,
       servingBudgetBytes: maxServingBytes,
-      images: [],
+      images: existingManifest?.images ?? [],
       status: 'failed',
       failures: failures.map((failure) => ({
         photoIds: failure.group.photoIds,
@@ -1297,9 +1513,12 @@ export async function processSite(
     return outcome.result;
   });
   const groupedContent = contentGroups(sources);
+  const transactionId = `${process.pid}-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 10)}`;
   const stageDirectory = path.join(
     outputDirectory,
-    `.staging-${process.pid}-${Date.now()}`,
+    `.staging-${transactionId}`,
   );
   await mkdir(stageDirectory, { recursive: true });
 
@@ -1369,22 +1588,52 @@ export async function processSite(
       status: 'complete',
     };
 
+    const previousOutputPaths = manifestOutputPublicPaths(existingManifest);
+    const nextOutputPaths = manifestOutputPublicPaths(manifest);
+    const pendingCleanupPaths = [...previousOutputPaths].filter(
+      (publicPath) => !nextOutputPaths.has(publicPath),
+    );
+    const nextManifest: ImagesManifest = {
+      ...manifest,
+      transactionId,
+      ...(pendingCleanupPaths.length > 0 ? { pendingCleanupPaths } : {}),
+    };
+    const updatedSite: InputSite = { ...site, photos: updatedPhotos };
+    const journal: TransactionJournal = {
+      version: 1,
+      transactionId,
+      outputDirectory,
+      sitePath,
+      stageDirectory,
+      outputPaths: [...nextOutputPaths],
+      previousManifest: existingManifest ?? null,
+      nextManifest,
+      previousSite: site,
+      nextSite: updatedSite,
+    };
+    await writeAtomic(
+      pendingManifestPath(imagesManifestPath),
+      `${JSON.stringify(journal, null, 2)}\n`,
+    );
+
     for (const item of serving) {
       await writeStagedPair(stageDirectory, item.contentHash, item.pair);
       await commitStagedPair(stageDirectory, outputDirectory, item.contentHash);
     }
-    const updatedSite: InputSite = { ...site, photos: updatedPhotos };
     await writeAtomic(
       imagesManifestPath,
-      `${JSON.stringify(manifest, null, 2)}\n`,
+      `${JSON.stringify(nextManifest, null, 2)}\n`,
     );
     await writeAtomic(sitePath, `${JSON.stringify(updatedSite, null, 2)}\n`);
-    await prunePreviousManifestOutputs(
-      outputDirectory,
-      existingManifest,
-      manifest,
+    await rm(pendingManifestPath(imagesManifestPath), { force: true });
+    await pruneOutputPaths(outputDirectory, pendingCleanupPaths);
+    const finalManifest: ImagesManifest = { ...nextManifest };
+    delete finalManifest.pendingCleanupPaths;
+    await writeAtomic(
+      imagesManifestPath,
+      `${JSON.stringify(finalManifest, null, 2)}\n`,
     );
-    return { mode, manifest, site: updatedSite };
+    return { mode, manifest: finalManifest, site: updatedSite };
   } finally {
     await rm(stageDirectory, { recursive: true, force: true });
   }
