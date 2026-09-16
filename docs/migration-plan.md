@@ -2,6 +2,10 @@
 
 # David Hahn Photography migration — revised plan
 
+## Confirmed implementation decisions
+
+On 16 September 2026, Lucas confirmed that final galleries must follow the live website’s displayed order when it differs from XML. XML ordering remains in the reconciliation record. Gallery grids use thumbnails until a lightbox opens.
+
 ## 1. Review resolution and image policy
 
 Adopt the review’s requirements for measured budgets, explicit CDN rendition selection and XML-order reconciliation. Your latest clarification supersedes the original image-storage and multi-format requirements: **commit only a large web image and a thumbnail per photograph.** David retains the originals.
